@@ -52,8 +52,8 @@ public class PeerHSQLDB {
 			String messageTable = "Messages";
 			String createMessageTableSQL = "CREATE TABLE "+messageTable + " (" + "message_id         VARCHAR    NOT NULL primary key,"
 					+ "upstream_ip         VARCHAR                  NOT NULL," + "upstream_port       VARCHAR     NOT NULL,"
-					+ "TTL	INT      NOT NULL, " 
-					+ " constraint unique_upstream UNIQUE ( upstream_ip,upstream_port) )";
+					+ "time_insert	date      NOT NULL, time_expire	date      NOT NULL , file_name VARCHAR                  NOT NULL " 
+					+ " )";
 			
 			try {
 				if(!checkTableExists(conn, fileTable)) {

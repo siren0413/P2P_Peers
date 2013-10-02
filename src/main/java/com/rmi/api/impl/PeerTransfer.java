@@ -37,12 +37,16 @@ import java.rmi.server.RemoteServer;
 import java.rmi.server.ServerNotActiveException;
 import java.rmi.server.UnicastRemoteObject;
 import java.sql.SQLException;
+import java.util.Collection;
+import java.util.Date;
 
 import org.apache.log4j.Logger;
 
+import com.cache.PeerMessage;
+import com.client.PeerWindow;
 import com.dao.PeerDAO;
-import com.rmi.api.IHeartBeat;
 import com.rmi.api.IPeerTransfer;
+import com.util.PropertyUtil;
 
 @SuppressWarnings("serial")
 public class PeerTransfer extends UnicastRemoteObject implements IPeerTransfer {
@@ -52,9 +56,11 @@ public class PeerTransfer extends UnicastRemoteObject implements IPeerTransfer {
 
 	private Logger LOGGER = Logger.getLogger(PeerTransfer.class);
 	private PeerDAO peerDAO = new PeerDAO();
+	private PeerWindow window;
 
-	public PeerTransfer() throws RemoteException {
+	public PeerTransfer(PeerWindow window) throws RemoteException {
 		super();
+		this.window = window;
 	}
 
 	// download a file from a peer
@@ -124,7 +130,7 @@ public class PeerTransfer extends UnicastRemoteObject implements IPeerTransfer {
 
 			InetAddress ia = java.net.InetAddress.getByName(clienthost);
 			String clentIp = ia.getHostAddress();
-			
+
 			LOGGER.info("Received peer message. peer IP[" + clentIp + "]");
 
 			if (TTL == 0) {
@@ -138,7 +144,9 @@ public class PeerTransfer extends UnicastRemoteObject implements IPeerTransfer {
 					LOGGER.debug("messageid:" + messageId + " already exist.");
 					return;
 				} else {
-					peerDAO.addMessage(messageId, clentIp, service_port, TTL);
+					Date time_insert = new Date(System.currentTimeMillis());
+					Date time_expire = new Date(time_insert.getTime() + TTL * 1000);
+					peerDAO.addMessage(messageId, clentIp, service_port, time_insert, time_expire, fileName);
 					LOGGER.debug("add message to database, message from peer:" + clentIp);
 				}
 
@@ -146,20 +154,22 @@ public class PeerTransfer extends UnicastRemoteObject implements IPeerTransfer {
 				// database. if yes, then ignore, if no, continue;
 				// put ip and port and messageId into local database
 				// query local database see if we have the file.
-				
-				if(peerDAO.checkFileAvailable(fileName)) {
+
+				if (peerDAO.checkFileAvailable(fileName)) {
 					LOGGER.debug("hitquery, looping back to sender.");
 					LOGGER.debug("invoke remote object [" + "rmi://" + clentIp + ":" + service_port + "/peerTransfer]");
 					IPeerTransfer peerTransfer = (IPeerTransfer) Naming.lookup("rmi://" + clentIp + ":" + service_port + "/peerTransfer");
 					peerTransfer.hitQuery(messageId, TTL, fileName, InetAddress.getLocalHost().getHostAddress(), "2055");
-					
-					
-					
+
 				}
-				
-				
-				
-				
+
+				// forward to neighbors
+				PropertyUtil propertyUtil = new PropertyUtil("network.properties");
+				Collection<Object> values = propertyUtil.getProperties();
+				for (Object obj : values) {
+					IPeerTransfer peerTransfer = (IPeerTransfer) Naming.lookup("rmi://" + obj + "/peerTransfer");
+					peerTransfer.query(messageId, TTL, fileName, "2055");
+				}
 
 			}
 
@@ -178,12 +188,52 @@ public class PeerTransfer extends UnicastRemoteObject implements IPeerTransfer {
 		} catch (SQLException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 
 	}
 
 	public void hitQuery(String messageId, int TTL, String fileName, String peerIP, String peerPort) throws RemoteException {
+		try {
+			PeerMessage msg = peerDAO.getPeerMessage(messageId);
+			if (msg == null) {
+				LOGGER.debug("message:" + messageId + " already deleted.");
+				return;
+			}
+			if (msg.getUpstream_ip().equals(InetAddress.getLocalHost().getHostAddress())) {
+				// the original sender, and put the peerIP and peerPort and
+				// fileName in queue.
+				window.getDownloadingQueue().put(peerIP+":"+peerPort+":"+messageId+":"+fileName);
+				
+			} else {
+				String upstream_ip = msg.getUpstream_ip();
+				String upstream_port = msg.getUpstream_port();
+				LOGGER.debug("invoke remote object [" + "rmi://" + upstream_ip + ":" + upstream_port + "/peerTransfer]");
+				IPeerTransfer peerTransfer = (IPeerTransfer) Naming.lookup("rmi://" + upstream_ip + ":" + upstream_port + "/peerTransfer");
+				peerTransfer.hitQuery(messageId, TTL, fileName, peerIP, peerPort);
+			}
 
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (UnknownHostException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (MalformedURLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (NotBoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 
 	public void queryExpire(String messageId) throws RemoteException {

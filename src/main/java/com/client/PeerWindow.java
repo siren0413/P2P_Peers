@@ -32,6 +32,8 @@ import javax.swing.JPanel;
 
 import java.awt.GridLayout;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.rmi.ConnectException;
 import java.rmi.Naming;
@@ -39,11 +41,16 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.util.TimerTask;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.awt.Insets;
+
 import javax.swing.JButton;
 import javax.swing.JOptionPane;
+
 import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
 
@@ -52,14 +59,17 @@ import javax.swing.JFileChooser;
 import com.db.PeerDB.PeerHSQLDB;
 import com.rmi.api.IRegister;
 import com.rmi.api.impl.PeerTransfer;
+import com.util.PropertyUtil;
 import com.util.SystemUtil;
 
 import javax.swing.JTextField;
 import javax.swing.JLabel;
 
 import org.apache.log4j.Logger;
+
 import javax.swing.JProgressBar;
 import javax.swing.text.DefaultCaret;
+
 import java.awt.Font;
 
 
@@ -119,6 +129,10 @@ public class PeerWindow {
 	// Object
 	/** The peer. */
 	private Peer peer;
+	
+	private PeerTransfer peerTransfer;
+	
+	private BlockingQueue<String> downloadingQueue;
 
 	/** The peer registry. */
 	Registry peerRegistry;
@@ -145,10 +159,13 @@ public class PeerWindow {
 
 	/**
 	 * Create the application.
+	 * @throws RemoteException 
 	 */
-	private PeerWindow() {
+	private PeerWindow() throws RemoteException {
 		initialize();
 		peer = new Peer(this);
+		peerTransfer = new PeerTransfer(this);
+		downloadingQueue = new ArrayBlockingQueue<String>(100);
 		PeerHSQLDB.initDB();
 	}
 
@@ -246,6 +263,7 @@ public class PeerWindow {
 					LOGGER.info("start a new thread for downloading file.");
 					t.start();
 
+
 				}
 
 			}
@@ -311,10 +329,23 @@ public class PeerWindow {
 		btnConnect.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				try {
+					
+					try {
+						LOGGER.info("Loading network configuration file...");
+						PropertyUtil propertyUtil = new PropertyUtil("network.properties");
+					} catch (FileNotFoundException e1) {
+						textArea.append(SystemUtil.getSimpleTime() + "Network configuration file not found.\n");
+						LOGGER.debug("Network configuration file not found",e1);
+						return;
+					} catch (IOException e1) {
+						textArea.append(SystemUtil.getSimpleTime() + "Unknown I/O error.\n");
+						LOGGER.debug("Unknown I/O error.",e1);
+						return;
+					}
 
 					// register service port
 					peerRegistry = LocateRegistry.createRegistry(2055);
-					peerRegistry.rebind("peerTransfer", new PeerTransfer());
+					peerRegistry.rebind("peerTransfer", peerTransfer);
 					LOGGER.info("open service port 2055, bind object peerTransfer");
 
 					if (peerRegistry != null) {
@@ -324,10 +355,12 @@ public class PeerWindow {
 						LOGGER.error("Unable to register service port [2055]!");
 						return;
 					}
+					
+					
 
 					btnConnect.setEnabled(false);
 					
-					peer.query(null, 0, null);
+					
 
 					// peer
 					peer.setPeer_service_port("2055");
@@ -387,8 +420,9 @@ public class PeerWindow {
 	 * Gets the single instance of ClientWindow.
 	 * 
 	 * @return single instance of ClientWindow
+	 * @throws RemoteException 
 	 */
-	public static PeerWindow getInstance() {
+	public static PeerWindow getInstance() throws RemoteException {
 		if (instance == null) {
 			instance = new PeerWindow();
 		}
@@ -439,4 +473,11 @@ public class PeerWindow {
 	public JTextField getTextField_DownloadLimit() {
 		return textField_downloadLimit;
 	}
+
+	public BlockingQueue<String> getDownloadingQueue() {
+		return downloadingQueue;
+	}
+	
+	
+	
 }

@@ -20,9 +20,11 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 import com.cache.PeerInfo;
+import com.cache.PeerMessage;
 import com.db.PeerDB.PeerHSQLDB;
 import com.util.ID_Generator;
 
@@ -251,15 +253,17 @@ public class PeerDAO {
 	}
 	
 	
-	public void addMessage(String messageId,String upstream_ip,String upstream_port, int TTL) throws SQLException {
+	public void addMessage(String messageId,String upstream_ip,String upstream_port, Date insert_time, Date expire_time ,String fileName) throws SQLException {
 		try {
 			conn = PeerHSQLDB.getConnection();
-			String sql = "insert into Messages values (?,?,?,?)";
+			String sql = "insert into Messages values (?,?,?,?,?,?)";
 			stmt = conn.prepareStatement(sql);
 			stmt.setString(1, messageId);
 			stmt.setString(2, upstream_ip);
 			stmt.setString(3, upstream_port);
-			stmt.setInt(4, TTL);
+			stmt.setDate(4, new java.sql.Date(insert_time.getTime()));
+			stmt.setDate(5, new java.sql.Date(expire_time.getTime()));
+			stmt.setString(6, fileName);
 			stmt.executeUpdate();
 
 		} finally {
@@ -303,6 +307,64 @@ public class PeerDAO {
 	}
 	
 	
+	public PeerMessage getPeerMessage(String messageId) throws SQLException {
+		PeerMessage msg = null;
+		try {
+			conn = PeerHSQLDB.getConnection();
+			statement = conn.createStatement();
+			String sql = "select * from Messages where message_id like '" + messageId + "'";
+			result = statement.executeQuery(sql);
+			while (result.next()) {
+				msg = new PeerMessage();
+				msg.setMessage_id(messageId);
+				msg.setUpstream_ip(result.getString("upstream_ip"));
+				msg.setUpstream_port(result.getString("upstream_port"));
+				msg.setTime_insert(new Date(result.getDate("time_insert").getTime()));
+				msg.setTime_expire(new Date(result.getDate("time_expire").getTime()));
+				msg.setFileName(result.getString("file_name"));
+			}
+		} finally {
+			try {
+				statement.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			} finally {
+				try {
+					conn.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		
+		return msg;
+		
+	}
+	
+	public void removeMessage(String messageId) throws SQLException{
+		try {
+			conn = PeerHSQLDB.getConnection();
+			statement = conn.createStatement();
+			String sql = "delete from Messages where message_id like '" + messageId + "'";
+			statement.executeUpdate(sql);
+
+		} finally {
+			try {
+				stmt.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			} finally {
+				try {
+					conn.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		
+		
+		
+	}
 	
 	
 	

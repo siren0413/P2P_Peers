@@ -28,7 +28,9 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.MalformedURLException;
+import java.net.UnknownHostException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
@@ -36,6 +38,7 @@ import java.security.MessageDigest;
 import java.sql.SQLException;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 
 import javax.swing.JOptionPane;
@@ -48,6 +51,7 @@ import com.rmi.api.IHeartBeat;
 import com.rmi.api.IPeerTransfer;
 import com.rmi.api.IRegister;
 import com.rmi.api.IServerTransfer;
+import com.util.ID_Generator;
 import com.util.PropertyUtil;
 import com.util.SystemUtil;
 
@@ -94,13 +98,6 @@ public class Peer {
 	 */
 	public boolean shareFile(File file) {
 		try {
-			LOGGER.debug("invoke remote object [" + "rmi://" + serverIP + ":" + serverPort + "/register]");
-			IRegister register = (IRegister) Naming.lookup("rmi://" + serverIP + ":" + serverPort + "/register");
-			boolean result1 = register.registerFile(file.getName());
-			if (result1)
-				LOGGER.info("register file[" + file.getName() + "] to index server successfully!");
-			else
-				return false;
 			// add the file to self database
 			boolean result2 = peerDAO.insertFile(file.getAbsolutePath(), file.getName(), 100);
 			if (result2)
@@ -111,15 +108,55 @@ public class Peer {
 		} catch (SQLException e) {
 			LOGGER.error("Unable to register file [" + file.getName() + "] due to DAO error", e);
 			return false;
-		} catch (RemoteException e) {
-			LOGGER.error("Unable to register file [" + file.getName() + "] due to Remote error", e);
-		} catch (MalformedURLException e) {
-			LOGGER.error("Unable to register file [" + file.getName() + "] due to URL not correct", e);
-		} catch (NotBoundException e) {
-			LOGGER.error("Unable to register file [" + file.getName() + "] due to Not bound", e);
 		}
 
 		return true;
+	}
+
+	private class QueryProcess implements Runnable {
+		private String fileName;
+
+		public QueryProcess(String fileName) {
+			super();
+			this.fileName = fileName;
+		}
+		public void run() {
+			try {
+				Date time_insert = new Date(System.currentTimeMillis());
+				Date time_expire = new Date(time_insert.getTime() + 10 * 1000);
+				String messageId = ID_Generator.generateID();
+				peerDAO.addMessage(messageId, InetAddress.getLocalHost().getHostAddress(), peer_service_port, time_insert, time_expire, fileName);
+
+				LOGGER.info("Add message to database. ip:" + InetAddress.getLocalHost().getHostAddress() + " port:" + peer_service_port + " file:" + fileName);
+
+				PropertyUtil propertyUtil = new PropertyUtil("network.properties");
+				Collection<Object> values = propertyUtil.getProperties();
+				for (Object obj : values) {
+					IPeerTransfer peerTransfer = (IPeerTransfer) Naming.lookup("rmi://" + obj + "/peerTransfer");
+					peerTransfer.query(messageId, 10, fileName, peer_service_port);
+				}
+			} catch (UnknownHostException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (SQLException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (RemoteException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (FileNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (NotBoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+
+		}
+
 	}
 
 	/**
@@ -132,125 +169,118 @@ public class Peer {
 	 * @return true, if successful
 	 */
 	public boolean downloadFile(String fileName, String savePath) {
-		try {
-			LOGGER.debug("invoke remote object [" + "rmi://" + serverIP + ":" + serverPort + "/serverTransfer]");
-			IServerTransfer serverTransfer = (IServerTransfer) Naming.lookup("rmi://" + serverIP + ":" + serverPort + "/serverTransfer");
-			List<String> peers = serverTransfer.searchFile(fileName);
 
-			if (peers == null) {
-				JOptionPane.showMessageDialog(window.getFrame(), "No source available for download!", "ERROR", JOptionPane.ERROR_MESSAGE);
-				return false;
+		Thread queryProcess = new Thread(new QueryProcess(fileName));
+		queryProcess.start();
+
+		boolean result = false;
+		String messageId = null;
+
+		while (true) {
+
+			String element = null;
+			String[] destAddr = null;
+			try {
+				element = window.getDownloadingQueue().take();
+				destAddr = element.split(":");
+			} catch (InterruptedException e1) {
+				e1.printStackTrace();
+				continue;
 			}
-			boolean result = false;
-
-			for (String peer : peers) {
-				LOGGER.debug("invoke remote object [" + "rmi://" + peer + "/peerTransfer]");
-				IPeerTransfer peerTransfer;
+			String ip = destAddr[0];
+			String port = destAddr[1];
+			messageId = destAddr[2];
+			String file_name = destAddr[3];
+			
+			if(!file_name.equals(fileName)) {
+				LOGGER.debug("Destory previous downloading thread due to fileName not equal. expect["+fileName+"], was["+file_name+"]");
 				try {
-					peerTransfer = (IPeerTransfer) Naming.lookup("rmi://" + peer + "/peerTransfer");
-				} catch (Exception e2) {
-					e2.printStackTrace();
-					continue;
-				}
-				LOGGER.info("start downloading file from:" + "rmi://" + peer + "/peerTransfer");
-				try {
-					if (!peerTransfer.checkFileAvailable(fileName)) {
-						continue;
-					}
-				} catch (RemoteException e2) {
-					e2.printStackTrace();
-					continue;
-				}
-
-				int length = 0;
-				try {
-					length = peerTransfer.getFileLength(fileName);
-				} catch (RemoteException e2) {
-					e2.printStackTrace();
-					continue;
-				}
-				int start = 0;
-				int left = length;
-
-				LOGGER.info("file size:" + length + " bytes");
-
-				File file = new File(savePath);
-				OutputStream out;
-				try {
-					out = new FileOutputStream(file);
-				} catch (FileNotFoundException e1) {
-					e1.printStackTrace();
-					continue;
-				}
-				byte[] buffer;
-
-				window.getProgressBar().setMaximum(length);
-				window.getProgressBar().setVisible(true);
-				window.getProgressBar().setStringPainted(true);
-
-				LOGGER.info("download speed:" + Integer.valueOf(window.getTextField_DownloadLimit().getText()) + " KB/S");
-
-				window.getTextArea().append(SystemUtil.getSimpleTime() + "Start downloading...\n");
-				while (left > 0) {
-					try {
-						Thread.sleep(1000);
-
-						buffer = peerTransfer.obtain(fileName, start, 1024 * Integer.valueOf(window.getTextField_DownloadLimit().getText()));
-
-						out.write(buffer);
-						left -= buffer.length;
-						start += buffer.length;
-						window.getProgressBar().setValue(start);
-						window.getProgressBar().setIndeterminate(false);
-						window.getProgressBar().repaint();
-					} catch (Exception e) {
-						e.printStackTrace();
-						continue;
-					}
-				}
-				try {
-					out.close();
-				} catch (IOException e) {
+					window.getDownloadingQueue().put(element);
+				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
-				result = true;
+				return false;
 			}
+			LOGGER.debug("invoke remote object [" + "rmi://" + ip + ":" + port + "/peerTransfer]");
+			IPeerTransfer peerTransfer;
+			try {
+				peerTransfer = (IPeerTransfer) Naming.lookup("rmi://" + ip + ":" + port + "/peerTransfer");
+			} catch (Exception e1) {
+				e1.printStackTrace();
+				continue;
+			}
+
+			int length = 0;
+			try {
+				length = peerTransfer.getFileLength(fileName);
+			} catch (RemoteException e1) {
+				e1.printStackTrace();
+				continue;
+			}
+			int start = 0;
+			int left = length;
+			LOGGER.info("file size:" + length + " bytes");
+
+			File file = new File(savePath);
+			OutputStream out;
+			try {
+				out = new FileOutputStream(file);
+			} catch (FileNotFoundException e1) {
+				e1.printStackTrace();
+				continue;
+			}
+
+			byte[] buffer;
+			window.getProgressBar().setMaximum(length);
+			window.getProgressBar().setVisible(true);
+			window.getProgressBar().setStringPainted(true);
+
+			LOGGER.info("download speed:" + Integer.valueOf(window.getTextField_DownloadLimit().getText()) + " KB/S");
+
+			window.getTextArea().append(SystemUtil.getSimpleTime() + "Start downloading...\n");
+
+			while (left > 0) {
+				try {
+					Thread.sleep(1000);
+
+					buffer = peerTransfer.obtain(fileName, start, 1024 * Integer.valueOf(window.getTextField_DownloadLimit().getText()));
+
+					out.write(buffer);
+					left -= buffer.length;
+					start += buffer.length;
+					window.getProgressBar().setValue(start);
+					window.getProgressBar().setIndeterminate(false);
+					window.getProgressBar().repaint();
+				} catch (Exception e) {
+					e.printStackTrace();
+					continue;
+				}
+			}
+			
+			try {
+				out.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			result = true;
+
 			if (result) {
 				LOGGER.info("download file successfully!");
 				window.getTextArea().append(SystemUtil.getSimpleTime() + "Download complete!\n");
+				try {
+					peerDAO.removeMessage(messageId);
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+				window.getDownloadingQueue().clear();
 			} else {
 				LOGGER.info("fail to download.");
 				window.getTextArea().append(SystemUtil.getSimpleTime() + "Download abort!\n");
 			}
-		} catch (Exception e) {
-			LOGGER.error("fail to download file [" + fileName + "] ", e);
-			JOptionPane.showMessageDialog(window.getFrame(), e.getMessage(), "ERROR", JOptionPane.ERROR_MESSAGE);
+			window.getProgressBar().setVisible(false);
+
 		}
 
-		window.getProgressBar().setVisible(false);
-		return true;
-	}
-	
-
-	public void query(String messageId, int TTL, String fileName) {
-		try {
-			PropertyUtil propertyUtil = new PropertyUtil("network.properties");
-			Collection<Object> values = propertyUtil.getProperties();
-			for(Object obj:values) {
-				System.out.println(obj);
-				window.getTextArea().append(obj+"\n");
-			}
-			
-			
-			
-			
-		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
 	}
 
 	/**
