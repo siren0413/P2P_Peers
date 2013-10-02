@@ -249,4 +249,67 @@ public class PeerDAO {
 		}
 		return peerInfolist;
 	}
+	
+	
+	public void addMessage(String messageId,String upstream_ip,String upstream_port, int TTL) throws SQLException {
+		try {
+			conn = PeerHSQLDB.getConnection();
+			String sql = "insert into Messages values (?,?,?,?)";
+			stmt = conn.prepareStatement(sql);
+			stmt.setString(1, messageId);
+			stmt.setString(2, upstream_ip);
+			stmt.setString(3, upstream_port);
+			stmt.setInt(4, TTL);
+			stmt.executeUpdate();
+
+		} finally {
+			try {
+				stmt.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			} finally {
+				try {
+					conn.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+	
+	public boolean checkMessage(String messageId) throws SQLException {
+		try {
+			conn = PeerHSQLDB.getConnection();
+			statement = conn.createStatement();
+			String sql = "select * from Messages where message_id like '" + messageId + "'";
+			result = statement.executeQuery(sql);
+			while (result.next()) {
+				return true;
+			}
+		} finally {
+			try {
+				statement.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			} finally {
+				try {
+					conn.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		return false;
+	}
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 }

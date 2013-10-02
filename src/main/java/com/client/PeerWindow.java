@@ -63,10 +63,10 @@ import javax.swing.text.DefaultCaret;
 import java.awt.Font;
 
 
-public class ClientWindow {
+public class PeerWindow {
 
 	/** The logger. */
-	private final Logger LOGGER = Logger.getLogger(ClientWindow.class);
+	private final Logger LOGGER = Logger.getLogger(PeerWindow.class);
 
 	/** The frame. */
 	private JFrame frame;
@@ -75,19 +75,13 @@ public class ClientWindow {
 	private JTextArea textArea;
 
 	/** The instance. */
-	private static ClientWindow instance;
+	private static PeerWindow instance;
 
 	/** The option pane. */
 	private final JOptionPane optionPane = new JOptionPane();
 
 	/** The file chooser. */
 	private final JFileChooser fileChooser = new JFileChooser();
-
-	/** The text field_server ip. */
-	private JTextField textField_serverIP;
-
-	/** The text field_server port. */
-	private JTextField textField_serverPort;
 
 	/** The text field_download file name. */
 	private JTextField textField_downloadFileName;
@@ -139,7 +133,7 @@ public class ClientWindow {
 		EventQueue.invokeLater(new Runnable() {
 			public void run() {
 				try {
-					ClientWindow window = ClientWindow.getInstance();
+					PeerWindow window = PeerWindow.getInstance();
 					window.frame.setVisible(true);
 				} catch (Exception e) {
 					e.printStackTrace();
@@ -152,7 +146,7 @@ public class ClientWindow {
 	/**
 	 * Create the application.
 	 */
-	private ClientWindow() {
+	private PeerWindow() {
 		initialize();
 		peer = new Peer(this);
 		PeerHSQLDB.initDB();
@@ -222,26 +216,6 @@ public class ClientWindow {
 		});
 		btnNewButton.setBounds(19, 266, 122, 26);
 		panel.add(btnNewButton);
-
-		textField_serverIP = new JTextField();
-		textField_serverIP.setText(default_IP);
-		textField_serverIP.setBounds(70, 189, 122, 28);
-		panel.add(textField_serverIP);
-		textField_serverIP.setColumns(10);
-
-		textField_serverPort = new JTextField();
-		textField_serverPort.setText(default_port);
-		textField_serverPort.setBounds(236, 189, 66, 28);
-		panel.add(textField_serverPort);
-		textField_serverPort.setColumns(10);
-
-		JLabel lblNewLabel = new JLabel("Server IP");
-		lblNewLabel.setBounds(10, 195, 61, 16);
-		panel.add(lblNewLabel);
-
-		JLabel lblPort = new JLabel("Port");
-		lblPort.setBounds(204, 195, 61, 16);
-		panel.add(lblPort);
 
 		final JButton btnDownloadFiles = new JButton("Download Files");
 		btnDownloadFiles.setEnabled(false);
@@ -338,31 +312,12 @@ public class ClientWindow {
 			public void actionPerformed(ActionEvent e) {
 				try {
 
-					String serverIP = textField_serverIP.getText();
-					String serverPort = textField_serverPort.getText();
-
-					pattern = Pattern.compile(IP_PATTERN);
-					matcher = pattern.matcher(serverIP);
-					if (!matcher.matches()) {
-						JOptionPane.showMessageDialog(frame, "The IP address is not valid!", "ERROR", JOptionPane.ERROR_MESSAGE);
-						return;
-					}
-					pattern = Pattern.compile(PORT_PATTERN);
-					matcher = pattern.matcher(serverPort);
-					if (!matcher.matches()) {
-						JOptionPane.showMessageDialog(frame, "The port is not valid!", "ERROR", JOptionPane.ERROR_MESSAGE);
-						return;
-					}
-
-					LOGGER.debug("invoke remote object [" + "rmi://" + serverIP + ":" + serverPort + "/register]");
-					IRegister register = (IRegister) Naming.lookup("rmi://" + serverIP + ":" + serverPort + "/register");
-
 					// register service port
 					peerRegistry = LocateRegistry.createRegistry(2055);
 					peerRegistry.rebind("peerTransfer", new PeerTransfer());
 					LOGGER.info("open service port 2055, bind object peerTransfer");
 
-					if (peerRegistry != null && register.registerPeer("2055")) {
+					if (peerRegistry != null) {
 						LOGGER.info("Register service port [2055] successfully!");
 					} else {
 						textArea.append(SystemUtil.getSimpleTime() + "Unable to register service port [2055]!\n");
@@ -370,16 +325,12 @@ public class ClientWindow {
 						return;
 					}
 
-					textArea.append(SystemUtil.getSimpleTime() + "Connected to server [" + serverIP + ":" + serverPort
-							+ "] successfully!\n");
-					textField_serverIP.setEnabled(false);
-					textField_serverPort.setEnabled(false);
 					btnConnect.setEnabled(false);
+					
+					peer.query(null, 0, null);
 
 					// peer
 					peer.setPeer_service_port("2055");
-					peer.setServer_ip(serverIP);
-					peer.setServer_port(serverPort);
 
 					// button enable
 					btnNewButton.setEnabled(true);
@@ -389,59 +340,13 @@ public class ClientWindow {
 					textField_downloadFileName.setEnabled(true);
 					textField_downloadLimit.setEnabled(true);
 
-					// start thread
-					Thread t = new Thread(new Runnable() {
-
-						public void run() {
-							while (true) {
-								try {
-									if (!peer.sendSignal()) {
-										peer.sendReport();
-									}
-									Thread.sleep(10000);
-
-								} catch (Exception e) {
-									e.printStackTrace();
-								}
-							}
-
-						}
-					});
-
-					t.start();
-
-					Thread t1 = new Thread(new Runnable() {
-
-						public void run() {
-							while (true) {
-								try {
-									peer.updateLocalDatabase();
-									Thread.sleep(10000);
-								} catch (Exception e) {
-									e.printStackTrace();
-								}
-							}
-
-						}
-					});
-
-					t1.start();
-
 				} catch (ConnectException e1) {
-					JOptionPane.showMessageDialog(frame, "unable to connect to server!\nplease make sure the address is correct",
-							"ERROR", JOptionPane.ERROR_MESSAGE);
-					return;
-				} catch (MalformedURLException e1) {
 					JOptionPane.showMessageDialog(frame, "unable to connect to server!\nplease make sure the address is correct",
 							"ERROR", JOptionPane.ERROR_MESSAGE);
 					return;
 				} catch (RemoteException e1) {
 					JOptionPane.showMessageDialog(frame, "unknown server error! \nplease try again later", "ERROR",
 							JOptionPane.ERROR_MESSAGE);
-					return;
-				} catch (NotBoundException e1) {
-					JOptionPane.showMessageDialog(frame, "unable to connect to server!\nplease make sure the address is correct",
-							"ERROR", JOptionPane.ERROR_MESSAGE);
 					return;
 				}
 			}
@@ -483,9 +388,9 @@ public class ClientWindow {
 	 * 
 	 * @return single instance of ClientWindow
 	 */
-	public static ClientWindow getInstance() {
+	public static PeerWindow getInstance() {
 		if (instance == null) {
-			instance = new ClientWindow();
+			instance = new PeerWindow();
 		}
 		return instance;
 	}

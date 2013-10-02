@@ -43,19 +43,31 @@ public class PeerHSQLDB {
 		try {
 			Class.forName("org.hsqldb.jdbcDriver");
 			Connection conn = getConnection();
-			String tableName = "PeerFiles";
-			String sql = "CREATE TABLE "+tableName + " (" + "id         VARCHAR    NOT NULL primary key,"
+			String fileTable = "PeerFiles";
+			String createFileTableSQL = "CREATE TABLE "+fileTable + " (" + "id         VARCHAR    NOT NULL primary key,"
 					+ "file_path         VARCHAR                  NOT NULL," + "file_name       VARCHAR     NOT NULL,"
 					+ "file_size	INT      NOT NULL, " 
 					+ " constraint unique_file_and_file_path UNIQUE ( file_path,file_size) )";
 			
+			String messageTable = "Messages";
+			String createMessageTableSQL = "CREATE TABLE "+messageTable + " (" + "message_id         VARCHAR    NOT NULL primary key,"
+					+ "upstream_ip         VARCHAR                  NOT NULL," + "upstream_port       VARCHAR     NOT NULL,"
+					+ "TTL	INT      NOT NULL, " 
+					+ " constraint unique_upstream UNIQUE ( upstream_ip,upstream_port) )";
+			
 			try {
-				if(!checkTableExists(conn, tableName)) {
-					LOGGER.info("Table "+ tableName + " dose not exits.");
+				if(!checkTableExists(conn, fileTable)) {
 					Statement stat = conn.createStatement();
-					stat.executeUpdate(sql);
+					stat.executeUpdate(createFileTableSQL);
 					stat.close();
-					LOGGER.info("Table " + tableName + " creates successfully.");
+					LOGGER.info("Table " + fileTable + " creates successfully.");
+				}
+				
+				if(!checkTableExists(conn, messageTable)) {
+					Statement stat = conn.createStatement();
+					stat.executeUpdate(createMessageTableSQL);
+					stat.close();
+					LOGGER.info("Table " + messageTable + " creates successfully.");
 				}
 				
 			} catch (SQLException e) {
@@ -63,6 +75,8 @@ public class PeerHSQLDB {
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
+			
+		
 
 			conn.close();
 			LOGGER.info("initializing PeerHSQLDB Successfully!");

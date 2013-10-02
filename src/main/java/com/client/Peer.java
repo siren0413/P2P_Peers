@@ -34,6 +34,7 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.security.MessageDigest;
 import java.sql.SQLException;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
@@ -47,6 +48,7 @@ import com.rmi.api.IHeartBeat;
 import com.rmi.api.IPeerTransfer;
 import com.rmi.api.IRegister;
 import com.rmi.api.IServerTransfer;
+import com.util.PropertyUtil;
 import com.util.SystemUtil;
 
 /**
@@ -56,19 +58,19 @@ public class Peer {
 
 	/** The logger. */
 	private final Logger LOGGER = Logger.getLogger(Peer.class);
-	
+
 	/** The window. */
-	private ClientWindow window;
-	
+	private PeerWindow window;
+
 	/** The server ip. */
 	private String serverIP;
-	
+
 	/** The server port. */
 	private String serverPort;
-	
+
 	/** The peer_service_port. */
 	private String peer_service_port;
-	
+
 	/** The peer dao. */
 	private PeerDAO peerDAO;
 
@@ -78,7 +80,7 @@ public class Peer {
 	 * @param window
 	 *            the window
 	 */
-	public Peer(ClientWindow window) {
+	public Peer(PeerWindow window) {
 		this.window = window;
 		peerDAO = new PeerDAO();
 	}
@@ -132,13 +134,11 @@ public class Peer {
 	public boolean downloadFile(String fileName, String savePath) {
 		try {
 			LOGGER.debug("invoke remote object [" + "rmi://" + serverIP + ":" + serverPort + "/serverTransfer]");
-			IServerTransfer serverTransfer = (IServerTransfer) Naming.lookup("rmi://" + serverIP + ":" + serverPort
-					+ "/serverTransfer");
+			IServerTransfer serverTransfer = (IServerTransfer) Naming.lookup("rmi://" + serverIP + ":" + serverPort + "/serverTransfer");
 			List<String> peers = serverTransfer.searchFile(fileName);
 
 			if (peers == null) {
-				JOptionPane.showMessageDialog(window.getFrame(), "No source available for download!", "ERROR",
-						JOptionPane.ERROR_MESSAGE);
+				JOptionPane.showMessageDialog(window.getFrame(), "No source available for download!", "ERROR", JOptionPane.ERROR_MESSAGE);
 				return false;
 			}
 			boolean result = false;
@@ -188,15 +188,14 @@ public class Peer {
 				window.getProgressBar().setVisible(true);
 				window.getProgressBar().setStringPainted(true);
 
-				LOGGER.info("download speed:" + Integer.valueOf(window.getTextField_DownloadLimit().getText())+ " KB/S");
+				LOGGER.info("download speed:" + Integer.valueOf(window.getTextField_DownloadLimit().getText()) + " KB/S");
 
 				window.getTextArea().append(SystemUtil.getSimpleTime() + "Start downloading...\n");
 				while (left > 0) {
 					try {
 						Thread.sleep(1000);
 
-						buffer = peerTransfer.obtain(fileName, start,
-								1024 * Integer.valueOf(window.getTextField_DownloadLimit().getText()));
+						buffer = peerTransfer.obtain(fileName, start, 1024 * Integer.valueOf(window.getTextField_DownloadLimit().getText()));
 
 						out.write(buffer);
 						left -= buffer.length;
@@ -216,10 +215,10 @@ public class Peer {
 				}
 				result = true;
 			}
-			if(result) {
+			if (result) {
 				LOGGER.info("download file successfully!");
 				window.getTextArea().append(SystemUtil.getSimpleTime() + "Download complete!\n");
-			}else {
+			} else {
 				LOGGER.info("fail to download.");
 				window.getTextArea().append(SystemUtil.getSimpleTime() + "Download abort!\n");
 			}
@@ -230,6 +229,28 @@ public class Peer {
 
 		window.getProgressBar().setVisible(false);
 		return true;
+	}
+	
+
+	public void query(String messageId, int TTL, String fileName) {
+		try {
+			PropertyUtil propertyUtil = new PropertyUtil("network.properties");
+			Collection<Object> values = propertyUtil.getProperties();
+			for(Object obj:values) {
+				System.out.println(obj);
+				window.getTextArea().append(obj+"\n");
+			}
+			
+			
+			
+			
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 
 	/**
@@ -283,17 +304,14 @@ public class Peer {
 	public void listServerFile() {
 		try {
 			LOGGER.debug("invoke remote object [" + "rmi://" + serverIP + ":" + serverPort + "/serverTransfer]");
-			IServerTransfer serverTransfer = (IServerTransfer) Naming.lookup("rmi://" + serverIP + ":" + serverPort
-					+ "/serverTransfer");
+			IServerTransfer serverTransfer = (IServerTransfer) Naming.lookup("rmi://" + serverIP + ":" + serverPort + "/serverTransfer");
 			List<String> files = serverTransfer.listAllFile();
 			LOGGER.debug("got file list from index server.");
-			window.getTextArea().append(
-					SystemUtil.getSimpleTime() + "****************** Available File List *******************\n");
+			window.getTextArea().append(SystemUtil.getSimpleTime() + "****************** Available File List *******************\n");
 			for (String file : files) {
 				window.getTextArea().append(SystemUtil.getSimpleTime() + file + "\n");
 			}
-			window.getTextArea().append(
-					SystemUtil.getSimpleTime() + "**********************************************************\n");
+			window.getTextArea().append(SystemUtil.getSimpleTime() + "**********************************************************\n");
 
 		} catch (Exception e) {
 			LOGGER.error("fail to receive file list from server", e);
@@ -301,7 +319,6 @@ public class Peer {
 
 	}
 
-	
 	/**
 	 * Update local database.
 	 */

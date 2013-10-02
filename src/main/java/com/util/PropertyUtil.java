@@ -14,11 +14,19 @@
 
 package com.util;
 
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
-
+import java.util.PropertyResourceBundle;
+import java.util.ResourceBundle;
 
 public class PropertyUtil {
 
@@ -37,7 +45,8 @@ public class PropertyUtil {
 	 */
 	public PropertyUtil(String file) throws FileNotFoundException, IOException {
 		prop = new Properties();
-		InputStream in = PropertyUtil.class.getResourceAsStream(file);
+		String proFilePath = System.getProperty("user.dir") + File.separator + file;
+		InputStream in = new BufferedInputStream(new FileInputStream(proFilePath));
 		prop.load(in);
 	}
 
@@ -52,4 +61,9 @@ public class PropertyUtil {
 		return prop.getProperty(key);
 
 	}
+
+	public Collection<Object> getProperties() {
+		return prop.values();
+	}
+
 }
