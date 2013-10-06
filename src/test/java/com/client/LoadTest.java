@@ -1,17 +1,14 @@
 package com.client;
 
 import java.rmi.Naming;
-import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import org.junit.Test;
 
 import com.rmi.api.IPeerTransfer;
-import com.rmi.api.IServerTransfer;
 
 public class LoadTest {
 
@@ -29,7 +26,7 @@ public class LoadTest {
 		long start = System.currentTimeMillis();
 
 		for (int i = 0; i < 10000; i++) {
-			getFileList();
+			//
 		}
 
 		long end = System.currentTimeMillis();
@@ -98,18 +95,6 @@ public class LoadTest {
 		}
 	}
 
-	private void getFileList() {
-		try {
-			// Thread.sleep(new Random().nextInt(1000));
-			IServerTransfer serverTransfer = (IServerTransfer) Naming.lookup("rmi://" + serverIP + ":" + serverPort
-					+ "/serverTransfer");
-			List<String> files = serverTransfer.listAllFile();
-			// for (String file : files) {
-			// System.out.println(file);
-			// }
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
+	
 
 }

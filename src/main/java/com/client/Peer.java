@@ -34,23 +34,16 @@ import java.net.UnknownHostException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
-import java.security.MessageDigest;
 import java.sql.SQLException;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Date;
 import java.util.List;
-
-import javax.swing.JOptionPane;
 
 import org.apache.log4j.Logger;
 
 import com.cache.PeerInfo;
 import com.dao.PeerDAO;
-import com.rmi.api.IHeartBeat;
 import com.rmi.api.IPeerTransfer;
-import com.rmi.api.IRegister;
-import com.rmi.api.IServerTransfer;
 import com.util.ID_Generator;
 import com.util.PropertyUtil;
 import com.util.SystemUtil;
@@ -114,45 +107,32 @@ public class Peer {
 	}
 
 	private class QueryProcess implements Runnable {
+
+		private Object obj;
+		private String message_id;
 		private String fileName;
 
-		public QueryProcess(String fileName) {
+		public QueryProcess(Object obj, String message_id, String fileName) {
 			super();
+			this.obj = obj;
+			this.message_id = message_id;
 			this.fileName = fileName;
 		}
+
 		public void run() {
 			try {
-				Date time_insert = new Date(System.currentTimeMillis());
-				Date time_expire = new Date(time_insert.getTime() + 10 * 1000);
-				String messageId = ID_Generator.generateID();
-				peerDAO.addMessage(messageId, InetAddress.getLocalHost().getHostAddress(), peer_service_port, time_insert, time_expire, fileName);
-
-				LOGGER.info("Add message to database. ip:" + InetAddress.getLocalHost().getHostAddress() + " port:" + peer_service_port + " file:" + fileName);
-
-				PropertyUtil propertyUtil = new PropertyUtil("network.properties");
-				Collection<Object> values = propertyUtil.getProperties();
-				for (Object obj : values) {
-					IPeerTransfer peerTransfer = (IPeerTransfer) Naming.lookup("rmi://" + obj + "/peerTransfer");
-					peerTransfer.query(messageId, 10, fileName, peer_service_port);
-				}
-			} catch (UnknownHostException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (SQLException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (RemoteException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (FileNotFoundException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				LOGGER.debug("invoke RMI: " + "rmi://" + obj + "/peerTransfer");
+				IPeerTransfer peerTransfer = (IPeerTransfer) Naming.lookup("rmi://" + obj + "/peerTransfer");
+				peerTransfer.query(message_id, 10, fileName, peer_service_port);
 			} catch (NotBoundException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				LOGGER.error("Remote call error", e);
+				return;
+			} catch (MalformedURLException e) {
+				LOGGER.error("Remote call error", e);
+				return;
+			} catch (RemoteException e) {
+				LOGGER.error("Remote call error", e);
+				return;
 			}
 
 		}
@@ -168,10 +148,32 @@ public class Peer {
 	 *            the save path
 	 * @return true, if successful
 	 */
-	public boolean downloadFile(String fileName, String savePath) {
+	public boolean downloadFile(final String fileName, String savePath) {
 
-		Thread queryProcess = new Thread(new QueryProcess(fileName));
-		queryProcess.start();
+		// query
+		Date time_insert = new Date(System.currentTimeMillis());
+		Date time_expire = new Date(time_insert.getTime() + 10 * 1000);
+		final String message_id = ID_Generator.generateID();
+
+		try {
+			peerDAO.addMessage(message_id, InetAddress.getLocalHost().getHostAddress(), peer_service_port, time_insert, time_expire, fileName);
+
+			LOGGER.info("Add message to database. ip:" + InetAddress.getLocalHost().getHostAddress() + " port:" + peer_service_port + " file:" + fileName);
+
+			PropertyUtil propertyUtil = new PropertyUtil("network.properties");
+			Collection<Object> values = propertyUtil.getProperties();
+			for (final Object obj : values) {
+				new Thread(new QueryProcess(obj, message_id, fileName)).start();
+			}
+		} catch (UnknownHostException e2) {
+			e2.printStackTrace();
+		} catch (SQLException e2) {
+			e2.printStackTrace();
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 
 		boolean result = false;
 		String messageId = null;
@@ -191,9 +193,9 @@ public class Peer {
 			String port = destAddr[1];
 			messageId = destAddr[2];
 			String file_name = destAddr[3];
-			
-			if(!file_name.equals(fileName)) {
-				LOGGER.debug("Destory previous downloading thread due to fileName not equal. expect["+fileName+"], was["+file_name+"]");
+
+			if (!file_name.equals(fileName)) {
+				LOGGER.debug("Destory previous downloading thread due to fileName not equal. expect[" + fileName + "], was[" + file_name + "]");
 				try {
 					window.getDownloadingQueue().put(element);
 				} catch (InterruptedException e) {
@@ -256,7 +258,7 @@ public class Peer {
 					continue;
 				}
 			}
-			
+
 			try {
 				out.close();
 			} catch (IOException e) {
@@ -273,78 +275,10 @@ public class Peer {
 					e.printStackTrace();
 				}
 				window.getDownloadingQueue().clear();
-			} else {
-				LOGGER.info("fail to download.");
-				window.getTextArea().append(SystemUtil.getSimpleTime() + "Download abort!\n");
+				return true;
 			}
 			window.getProgressBar().setVisible(false);
 
-		}
-
-	}
-
-	/**
-	 * Send signal.
-	 * 
-	 * @return true, if successful
-	 */
-	public boolean sendSignal() {
-		try {
-			LOGGER.info("sending heartbeat signal to index server");
-			LOGGER.debug("invoke remote object [" + "rmi://" + serverIP + ":" + serverPort + "/heartBeat]");
-			IHeartBeat heartBeat = (IHeartBeat) Naming.lookup("rmi://" + serverIP + ":" + serverPort + "/heartBeat");
-			List<String> listFiles = peerDAO.selectAllFiles();
-			Collections.sort(listFiles);
-			MessageDigest md = MessageDigest.getInstance("MD5");
-			if (!heartBeat.signal(md.digest(listFiles.toString().getBytes()), peer_service_port)) {
-				LOGGER.info("peer data is not consistent with server data, request sync.");
-				return false;
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-
-		LOGGER.info("peer data is consistent with server data.");
-		return true;
-	}
-
-	/**
-	 * Send report.
-	 * 
-	 * @return true, if successful
-	 */
-	public boolean sendReport() {
-		try {
-			LOGGER.info("sending heartbeat report to sync with index server");
-			LOGGER.debug("invoke remote object [" + "rmi://" + serverIP + ":" + serverPort + "/heartBeat]");
-			IHeartBeat heartBeat = (IHeartBeat) Naming.lookup("rmi://" + serverIP + ":" + serverPort + "/heartBeat");
-			List<String> listFiles = peerDAO.selectAllFiles();
-			heartBeat.report(listFiles);
-			LOGGER.info("sent report successfully.");
-		} catch (Exception e) {
-			LOGGER.error("fail to send report", e);
-		}
-
-		return false;
-	}
-
-	/**
-	 * List server file.
-	 */
-	public void listServerFile() {
-		try {
-			LOGGER.debug("invoke remote object [" + "rmi://" + serverIP + ":" + serverPort + "/serverTransfer]");
-			IServerTransfer serverTransfer = (IServerTransfer) Naming.lookup("rmi://" + serverIP + ":" + serverPort + "/serverTransfer");
-			List<String> files = serverTransfer.listAllFile();
-			LOGGER.debug("got file list from index server.");
-			window.getTextArea().append(SystemUtil.getSimpleTime() + "****************** Available File List *******************\n");
-			for (String file : files) {
-				window.getTextArea().append(SystemUtil.getSimpleTime() + file + "\n");
-			}
-			window.getTextArea().append(SystemUtil.getSimpleTime() + "**********************************************************\n");
-
-		} catch (Exception e) {
-			LOGGER.error("fail to receive file list from server", e);
 		}
 
 	}
@@ -369,6 +303,17 @@ public class Peer {
 		} catch (SQLException e) {
 			LOGGER.error("DAO error", e);
 		}
+	}
+
+	public void cleanupMessageTable() {
+
+		try {
+			peerDAO.removeExpiredMessages();
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
 	}
 
 	/**

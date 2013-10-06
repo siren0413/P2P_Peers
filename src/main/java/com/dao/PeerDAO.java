@@ -14,6 +14,8 @@
  */
 package com.dao;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -362,10 +364,56 @@ public class PeerDAO {
 			}
 		}
 		
+	}
+	
+	public void removeExpiredMessages() throws SQLException{
+		try {
+			conn = PeerHSQLDB.getConnection();
+			statement = conn.createStatement();
+			String sql = "delete from Messages where time_expire < sysdate";
+			statement.executeUpdate(sql);
+
+		} finally {
+			try {
+				statement.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			} finally {
+				try {
+					conn.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
+		}
 		
 		
 	}
 	
+	
+	public void removeAllQueryMessages() throws SQLException{
+		try {
+			conn = PeerHSQLDB.getConnection();
+			statement = conn.createStatement();
+			String sql = "delete from Messages where upstream_ip like'"+InetAddress.getLocalHost().getHostAddress()+"'";
+			statement.executeUpdate(sql);
+
+		} catch (UnknownHostException e) {
+			e.printStackTrace();
+		} finally {
+			try {
+				statement.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			} finally {
+				try {
+					conn.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+	}
 	
 	
 	

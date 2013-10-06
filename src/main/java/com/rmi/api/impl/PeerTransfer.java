@@ -47,6 +47,7 @@ import com.client.PeerWindow;
 import com.dao.PeerDAO;
 import com.rmi.api.IPeerTransfer;
 import com.util.PropertyUtil;
+import com.util.SystemUtil;
 
 @SuppressWarnings("serial")
 public class PeerTransfer extends UnicastRemoteObject implements IPeerTransfer {
@@ -134,10 +135,8 @@ public class PeerTransfer extends UnicastRemoteObject implements IPeerTransfer {
 			LOGGER.info("Received peer message. peer IP[" + clentIp + "]");
 
 			if (TTL == 0) {
-				LOGGER.debug("TTL=" + TTL + " query expire, looping back to sender.");
-				LOGGER.debug("invoke remote object [" + "rmi://" + clentIp + ":" + service_port + "/peerTransfer]");
-				IPeerTransfer peerTransfer = (IPeerTransfer) Naming.lookup("rmi://" + clentIp + ":" + service_port + "/peerTransfer");
-				peerTransfer.queryExpire(messageId);
+				LOGGER.debug("TTL=" + TTL + " query expire.");
+				return;
 			} else {
 				TTL -= 1;
 				if (peerDAO.checkMessage(messageId)) {
@@ -159,7 +158,7 @@ public class PeerTransfer extends UnicastRemoteObject implements IPeerTransfer {
 					LOGGER.debug("hitquery, looping back to sender.");
 					LOGGER.debug("invoke remote object [" + "rmi://" + clentIp + ":" + service_port + "/peerTransfer]");
 					IPeerTransfer peerTransfer = (IPeerTransfer) Naming.lookup("rmi://" + clentIp + ":" + service_port + "/peerTransfer");
-					peerTransfer.hitQuery(messageId, TTL, fileName, InetAddress.getLocalHost().getHostAddress(), "2055");
+					peerTransfer.hitQuery(messageId, TTL, fileName, InetAddress.getLocalHost().getHostAddress(), window.getTextField_servicePort().getText());
 
 				}
 
@@ -168,7 +167,7 @@ public class PeerTransfer extends UnicastRemoteObject implements IPeerTransfer {
 				Collection<Object> values = propertyUtil.getProperties();
 				for (Object obj : values) {
 					IPeerTransfer peerTransfer = (IPeerTransfer) Naming.lookup("rmi://" + obj + "/peerTransfer");
-					peerTransfer.query(messageId, TTL, fileName, "2055");
+					peerTransfer.query(messageId, TTL, fileName, window.getTextField_servicePort().getText());
 				}
 
 			}
@@ -209,7 +208,7 @@ public class PeerTransfer extends UnicastRemoteObject implements IPeerTransfer {
 				// the original sender, and put the peerIP and peerPort and
 				// fileName in queue.
 				window.getDownloadingQueue().put(peerIP+":"+peerPort+":"+messageId+":"+fileName);
-				
+				window.getTextArea().append(SystemUtil.getSimpleTime()+"Resource:"+fileName+" found available on "+peerIP+"\n");
 			} else {
 				String upstream_ip = msg.getUpstream_ip();
 				String upstream_port = msg.getUpstream_port();

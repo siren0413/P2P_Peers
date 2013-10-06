@@ -6,7 +6,6 @@ package com.rmi.api;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
-import javax.management.Query;
 
 /**
  * Remote method for files transfer between peers
