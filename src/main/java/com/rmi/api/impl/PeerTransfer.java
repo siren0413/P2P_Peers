@@ -166,8 +166,7 @@ public class PeerTransfer extends UnicastRemoteObject implements IPeerTransfer {
 				PropertyUtil propertyUtil = new PropertyUtil("network.properties");
 				Collection<Object> values = propertyUtil.getProperties();
 				for (Object obj : values) {
-					IPeerTransfer peerTransfer = (IPeerTransfer) Naming.lookup("rmi://" + obj + "/peerTransfer");
-					peerTransfer.query(messageId, TTL, fileName, window.getTextField_servicePort().getText());
+					new Thread(new QueryProcess(obj, messageId, fileName, TTL)).start();
 				}
 
 			}
@@ -193,6 +192,41 @@ public class PeerTransfer extends UnicastRemoteObject implements IPeerTransfer {
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
+		}
+
+	}
+	
+	private class QueryProcess implements Runnable {
+
+		private Object obj;
+		private String message_id;
+		private String fileName;
+		private int TTL;
+
+		public QueryProcess(Object obj, String message_id, String fileName, int TTL) {
+			super();
+			this.obj = obj;
+			this.message_id = message_id;
+			this.fileName = fileName;
+			this.TTL = TTL;
+		}
+
+		public void run() {
+			try {
+				LOGGER.debug("invoke RMI: " + "rmi://" + obj + "/peerTransfer");
+				IPeerTransfer peerTransfer = (IPeerTransfer) Naming.lookup("rmi://" + obj + "/peerTransfer");
+				peerTransfer.query(message_id, TTL, fileName, window.getTextField_servicePort().getText());
+			} catch (NotBoundException e) {
+				LOGGER.error("Remote call error", e);
+				return;
+			} catch (MalformedURLException e) {
+				LOGGER.error("Remote call error", e);
+				return;
+			} catch (RemoteException e) {
+				LOGGER.error("Remote call error", e);
+				return;
+			}
+
 		}
 
 	}

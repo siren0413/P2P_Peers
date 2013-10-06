@@ -37,7 +37,6 @@ import java.rmi.ConnectException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
-import java.sql.SQLException;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -52,7 +51,6 @@ import java.awt.event.ActionEvent;
 
 import javax.swing.JFileChooser;
 
-import com.dao.PeerDAO;
 import com.db.PeerDB.PeerHSQLDB;
 import com.rmi.api.impl.PeerTransfer;
 import com.util.PropertyUtil;
@@ -105,7 +103,7 @@ public class PeerWindow {
 
 	private PeerTransfer peerTransfer;
 
-	private BlockingQueue<String> downloadingQueue;
+	private static BlockingQueue<String> downloadingQueue = new ArrayBlockingQueue<String>(100);;
 
 	/** The peer registry. */
 	Registry peerRegistry;
@@ -140,7 +138,6 @@ public class PeerWindow {
 		initialize();
 		peer = new Peer(this);
 		peerTransfer = new PeerTransfer(this);
-		downloadingQueue = new ArrayBlockingQueue<String>(100);
 		PeerHSQLDB.initDB();
 	}
 
@@ -462,7 +459,7 @@ public class PeerWindow {
 	
 	
 
-	public BlockingQueue<String> getDownloadingQueue() {
+	public static BlockingQueue<String> getDownloadingQueue() {
 		return downloadingQueue;
 	}
 	
