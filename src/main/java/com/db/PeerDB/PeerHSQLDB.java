@@ -44,15 +44,15 @@ public class PeerHSQLDB {
 			Class.forName("org.hsqldb.jdbcDriver");
 			Connection conn = getConnection();
 			String fileTable = "PeerFiles";
-			String createFileTableSQL = "CREATE TABLE "+fileTable + " (" + "id         VARCHAR    NOT NULL primary key,"
-					+ "file_path         VARCHAR                  NOT NULL," + "file_name       VARCHAR     NOT NULL,"
+			String createFileTableSQL = "CREATE TABLE "+fileTable + " (" + "id         VARCHAR(200)    NOT NULL primary key,"
+					+ "file_path         VARCHAR(200)                  NOT NULL," + "file_name       VARCHAR(200)     NOT NULL,"
 					+ "file_size	INT      NOT NULL, " 
 					+ " constraint unique_file_and_file_path UNIQUE ( file_path,file_size) )";
 			
 			String messageTable = "Messages";
-			String createMessageTableSQL = "CREATE TABLE "+messageTable + " (" + "message_id         VARCHAR    NOT NULL primary key,"
-					+ "upstream_ip         VARCHAR                  NOT NULL," + "upstream_port       VARCHAR     NOT NULL,"
-					+ "time_insert	date      NOT NULL, time_expire	date      NOT NULL , file_name VARCHAR                  NOT NULL " 
+			String createMessageTableSQL = "CREATE TABLE "+messageTable + " (" + "message_id         VARCHAR(200)    NOT NULL primary key,"
+					+ "upstream_ip         VARCHAR(200)                  NOT NULL," + "upstream_port       VARCHAR(200)     NOT NULL,"
+					+ "time_insert	timestamp      NOT NULL, time_expire	timestamp      NOT NULL , file_name VARCHAR(200)                  NOT NULL " 
 					+ " )";
 			
 			try {

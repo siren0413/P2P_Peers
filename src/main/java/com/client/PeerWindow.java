@@ -343,7 +343,7 @@ public class PeerWindow {
 					};
 
 					Timer timer = new Timer();
-					timer.schedule(task, 0, 10000);
+					timer.schedule(task, 0, 1000);
 
 				} catch (ConnectException e1) {
 					JOptionPane.showMessageDialog(frame, "unable to connect to server!\nplease make sure the address is correct", "ERROR",

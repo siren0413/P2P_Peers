@@ -21,6 +21,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -257,14 +258,16 @@ public class PeerDAO {
 	
 	public void addMessage(String messageId,String upstream_ip,String upstream_port, Date insert_time, Date expire_time ,String fileName) throws SQLException {
 		try {
+			System.out.println(insert_time.getTime());
+			System.out.println(expire_time.getTime());
 			conn = PeerHSQLDB.getConnection();
 			String sql = "insert into Messages values (?,?,?,?,?,?)";
 			stmt = conn.prepareStatement(sql);
 			stmt.setString(1, messageId);
 			stmt.setString(2, upstream_ip);
 			stmt.setString(3, upstream_port);
-			stmt.setDate(4, new java.sql.Date(insert_time.getTime()));
-			stmt.setDate(5, new java.sql.Date(expire_time.getTime()));
+			stmt.setTimestamp(4, new Timestamp(insert_time.getTime()));
+			stmt.setTimestamp(5, new Timestamp(expire_time.getTime()));
 			stmt.setString(6, fileName);
 			stmt.executeUpdate();
 
@@ -371,7 +374,8 @@ public class PeerDAO {
 			conn = PeerHSQLDB.getConnection();
 			statement = conn.createStatement();
 			String sql = "delete from Messages where time_expire < sysdate";
-			statement.executeUpdate(sql);
+			int i = statement.executeUpdate(sql);
+			conn.commit();
 
 		} finally {
 			try {
