@@ -241,7 +241,7 @@ public class PeerTransfer extends UnicastRemoteObject implements IPeerTransfer {
 			if (msg.getUpstream_ip().equals(InetAddress.getLocalHost().getHostAddress())) {
 				// the original sender, and put the peerIP and peerPort and
 				// fileName in queue.
-				window.getDownloadingQueue().put(peerIP+":"+peerPort+":"+messageId+":"+fileName);
+				PeerWindow.getDownloadingQueue().put(peerIP+":"+peerPort+":"+messageId+":"+fileName);
 				window.getTextArea().append(SystemUtil.getSimpleTime()+"Resource:"+fileName+" found available on "+peerIP+"\n");
 			} else {
 				String upstream_ip = msg.getUpstream_ip();

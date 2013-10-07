@@ -183,7 +183,7 @@ public class Peer {
 			String element = null;
 			String[] destAddr = null;
 			try {
-				element = window.getDownloadingQueue().take();
+				element = PeerWindow.getDownloadingQueue().take();
 				destAddr = element.split(":");
 			} catch (InterruptedException e1) {
 				e1.printStackTrace();
@@ -197,7 +197,7 @@ public class Peer {
 			if (!file_name.equals(fileName)) {
 				LOGGER.debug("Destory previous downloading thread due to fileName not equal. expect[" + fileName + "], was[" + file_name + "]");
 				try {
-					window.getDownloadingQueue().put(element);
+					PeerWindow.getDownloadingQueue().put(element);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -274,7 +274,7 @@ public class Peer {
 				} catch (SQLException e) {
 					e.printStackTrace();
 				}
-				window.getDownloadingQueue().clear();
+				PeerWindow.getDownloadingQueue().clear();
 				return true;
 			}
 			window.getProgressBar().setVisible(false);
